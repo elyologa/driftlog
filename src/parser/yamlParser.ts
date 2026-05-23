@@ -22,6 +22,20 @@ export interface ParseResult {
   filePath: string;
 }
 
+/**
+ * Validates that a parsed object contains all required ServiceConfig fields.
+ * Returns an error message string if validation fails, or null if valid.
+ */
+function validateServiceConfig(parsed: ServiceConfig): string | null {
+  if (!parsed.name || !parsed.version || !parsed.image) {
+    const missing = (['name', 'version', 'image'] as const)
+      .filter((field) => !parsed[field])
+      .join(', ');
+    return `Missing required fields: ${missing}`;
+  }
+  return null;
+}
+
 export function parseYamlFile(filePath: string): ParseResult {
   const resolvedPath = path.resolve(filePath);
 
@@ -45,12 +59,9 @@ export function parseYamlFile(filePath: string): ParseResult {
       };
     }
 
-    if (!parsed.name || !parsed.version || !parsed.image) {
-      return {
-        success: false,
-        error: 'Missing required fields: name, version, image',
-        filePath: resolvedPath,
-      };
+    const validationError = validateServiceConfig(parsed);
+    if (validationError) {
+      return { success: false, error: validationError, filePath: resolvedPath };
     }
 
     return {
@@ -75,8 +86,9 @@ export function parseYamlString(content: string, label = '<inline>'): ParseResul
       return { success: false, error: 'YAML content is empty or not an object', filePath: label };
     }
 
-    if (!parsed.name || !parsed.version || !parsed.image) {
-      return { success: false, error: 'Missing required fields: name, version, image', filePath: label };
+    const validationError = validateServiceConfig(parsed);
+    if (validationError) {
+      return { success: false, error: validationError, filePath: label };
     }
 
     return { success: true, config: parsed, filePath: label };
