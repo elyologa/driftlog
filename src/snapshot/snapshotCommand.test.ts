@@ -40,6 +40,16 @@ describe('runSnapshotCommand', () => {
     expect(output).toContain('No drift detected');
   });
 
+  test('detects drift when config changes between snapshots', () => {
+    runSnapshotCommand({ yamlFile: YAML_FIXTURE, storePath: TMP_STORE });
+    // Modify the YAML to simulate a config change
+    fs.writeFileSync(YAML_FIXTURE, 'name: test-service\nreplicas: 5\nenv: production\n', 'utf-8');
+    const output = runSnapshotCommand({ yamlFile: YAML_FIXTURE, storePath: TMP_STORE });
+    expect(output).toContain('Drift detected');
+    // Restore original fixture content for subsequent tests
+    fs.writeFileSync(YAML_FIXTURE, 'name: test-service\nreplicas: 2\nenv: staging\n', 'utf-8');
+  });
+
   test('dry-run does not persist snapshot', () => {
     runSnapshotCommand({ yamlFile: YAML_FIXTURE, storePath: TMP_STORE, dryRun: true });
     const store = loadSnapshotStore(TMP_STORE);
