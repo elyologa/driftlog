@@ -1,20 +1,10 @@
-export interface ScheduleConfig {
-  serviceId: string;
-  intervalMinutes: number;
-  yamlPath: string;
-  enabled: boolean;
+export interface ScheduleEntry {
+  serviceName: string;
+  intervalSeconds: number;
+  yamlPath?: string;
   lastRunAt?: string;
-  nextRunAt?: string;
 }
 
 export interface ScheduleStore {
-  schedules: Record<string, ScheduleConfig>;
-}
-
-export interface ScheduleRunResult {
-  serviceId: string;
-  ranAt: string;
-  driftDetected: boolean;
-  driftCount: number;
-  error?: string;
+  schedules: Record<string, ScheduleEntry>;
 }
