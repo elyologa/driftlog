@@ -48,6 +48,11 @@ describe('formatReport', () => {
     expect(output).toContain('[MISSING]');
     expect(output).toContain('[EXTRA]');
   });
+
+  it('includes the timestamp in the output', () => {
+    const output = formatReport(baseReport);
+    expect(output).toContain('2024-01-15T10:00:00.000Z');
+  });
 });
 
 describe('formatReportJson', () => {
@@ -56,5 +61,13 @@ describe('formatReportJson', () => {
     expect(() => JSON.parse(output)).not.toThrow();
     const parsed = JSON.parse(output);
     expect(parsed.serviceName).toBe('api-gateway');
+  });
+
+  it('preserves all top-level fields in JSON output', () => {
+    const output = formatReportJson(baseReport);
+    const parsed = JSON.parse(output);
+    expect(parsed.timestamp).toBe('2024-01-15T10:00:00.000Z');
+    expect(parsed.hasDrift).toBe(false);
+    expect(Array.isArray(parsed.drifts)).toBe(true);
   });
 });
