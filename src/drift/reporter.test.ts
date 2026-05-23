@@ -53,6 +53,24 @@ describe('formatReport', () => {
     const output = formatReport(baseReport);
     expect(output).toContain('2024-01-15T10:00:00.000Z');
   });
+
+  it('shows the drift message text in the output', () => {
+    const report: DriftReport = {
+      ...baseReport,
+      hasDrift: true,
+      drifts: [
+        {
+          path: 'app.port',
+          severity: 'changed',
+          expected: 8080,
+          actual: 3000,
+          message: 'Key "app.port" differs: expected 8080, got 3000',
+        },
+      ],
+    };
+    const output = formatReport(report);
+    expect(output).toContain('Key "app.port" differs: expected 8080, got 3000');
+  });
 });
 
 describe('formatReportJson', () => {
@@ -69,5 +87,25 @@ describe('formatReportJson', () => {
     expect(parsed.timestamp).toBe('2024-01-15T10:00:00.000Z');
     expect(parsed.hasDrift).toBe(false);
     expect(Array.isArray(parsed.drifts)).toBe(true);
+  });
+
+  it('serializes drift entries correctly in JSON output', () => {
+    const report: DriftReport = {
+      ...baseReport,
+      hasDrift: true,
+      drifts: [
+        {
+          path: 'db.host',
+          severity: 'changed',
+          expected: 'localhost',
+          actual: 'prod-db',
+          message: 'Key "db.host" differs: expected localhost, got prod-db',
+        },
+      ],
+    };
+    const parsed = JSON.parse(formatReportJson(report));
+    expect(parsed.drifts).toHaveLength(1);
+    expect(parsed.drifts[0].path).toBe('db.host');
+    expect(parsed.drifts[0].severity).toBe('changed');
   });
 });
