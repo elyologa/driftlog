@@ -22,6 +22,25 @@ function flattenObject(
 }
 
 /**
+ * Filters a DriftReport's entries by one or more severity levels.
+ *
+ * @param report     - The DriftReport to filter.
+ * @param severities - One or more severity levels to include.
+ * @returns A new DriftReport containing only entries matching the given severities.
+ */
+export function filterBySeverity(
+  report: DriftReport,
+  ...severities: DriftEntry['severity'][]
+): DriftReport {
+  const filtered = report.drifts.filter((d) => severities.includes(d.severity));
+  return {
+    ...report,
+    hasDrift: filtered.length > 0,
+    drifts: filtered,
+  };
+}
+
+/**
  * Compares expected and actual configuration maps for a given service and
  * returns a DriftReport describing any missing, changed, or extra keys.
  *
