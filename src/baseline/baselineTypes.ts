@@ -21,8 +21,14 @@ export interface BaselineStore {
 export type BaselineAction = "capture" | "compare" | "remove" | "list";
 
 export interface BaselineCommandOptions {
+  /** Path to the YAML config file to capture or compare against */
   yamlPath?: string;
+  /** Path to the JSON file used to persist baseline entries */
   baselinePath?: string;
+  /** Output results as JSON instead of human-readable text */
   json?: boolean;
+  /** Human-readable note to attach when capturing a baseline */
   note?: string;
+  /** Service name to target; if omitted, all services may be affected */
+  service?: string;
 }
