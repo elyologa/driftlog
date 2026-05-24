@@ -21,6 +21,15 @@ function flattenObject(
   );
 }
 
+/**
+ * Compares expected and actual configuration maps for a given service and
+ * returns a DriftReport describing any missing, changed, or extra keys.
+ *
+ * @param serviceName - Identifier for the service being checked.
+ * @param expected    - The source-of-truth configuration.
+ * @param actual      - The deployed configuration to compare against.
+ * @returns A DriftReport with all detected drift entries.
+ */
 export function detectDrift(
   serviceName: string,
   expected: ConfigMap,
