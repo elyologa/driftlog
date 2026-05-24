@@ -44,4 +44,14 @@ describe('detectDrift', () => {
     const report = detectDrift('svc', {}, {});
     expect(report.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
+
+  it('detects multiple drifts across nested keys', () => {
+    const expected = { app: { port: 3000, env: 'production', replicas: 3 } };
+    const actual = { app: { port: 8080, replicas: 3, debug: true } };
+    const report = detectDrift('svc', expected, actual);
+    expect(report.hasDrift).toBe(true);
+    expect(report.drifts.some((d) => d.severity === 'changed' && d.path === 'app.port')).toBe(true);
+    expect(report.drifts.some((d) => d.severity === 'missing' && d.path === 'app.env')).toBe(true);
+    expect(report.drifts.some((d) => d.severity === 'extra' && d.path === 'app.debug')).toBe(true);
+  });
 });
