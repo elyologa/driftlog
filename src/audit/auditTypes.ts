@@ -1,25 +1,23 @@
-export type AuditAction =
-  | 'snapshot'
-  | 'drift-check'
-  | 'baseline-capture'
-  | 'baseline-remove'
-  | 'ignore-add'
-  | 'ignore-remove'
-  | 'notify-set'
-  | 'schedule-set'
-  | 'schedule-remove';
-
 export interface AuditEntry {
-  id: string;
-  timestamp: string;
-  action: AuditAction;
   service: string;
+  action: string;
+  timestamp: string;
   details: string;
-  user?: string;
 }
 
 export interface AuditStore {
   entries: AuditEntry[];
 }
 
-export const MAX_AUDIT_ENTRIES = 500;
+export type AuditAction =
+  | "snapshot"
+  | "drift"
+  | "baseline-capture"
+  | "baseline-remove"
+  | "ignore-add"
+  | "ignore-remove"
+  | "notify-set"
+  | "schedule-upsert"
+  | "schedule-remove"
+  | "export"
+  | "history-prune";
