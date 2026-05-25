@@ -8,73 +8,61 @@ import {
   getRevertsForService,
   formatRevertResult,
 } from "./revertManager";
-import { saveSnapshotStore } from "../snapshot/snapshotManager";
 
-function makeTempFile(): string {
-  return path.join(os.tmpdir(), `driftlog-test-${Date.now()}-${Math.random()}.json`);
+function makeTempFile(content: string = "{}"): string {
+  const tmp = path.join(os.tmpdir(), `driftlog-revert-${Date.now()}-${Math.random()}.json`);
+  fs.writeFileSync(tmp, content, "utf-8");
+  return tmp;
 }
 
-describe("revertManager", () => {
-  test("loadRevertStore returns empty store if file missing", () => {
-    const store = loadRevertStore("/nonexistent/path.json");
-    expect(store).toEqual({ reverts: [] });
+describe("loadRevertStore / saveRevertStore", () => {
+  it("loads an empty store when file is empty JSON", () => {
+    const f = makeTempFile("{}" );
+    const store = loadRevertStore(f);
+    expect(store).toEqual({});
   });
 
-  test("saveRevertStore and loadRevertStore round-trip", () => {
-    const file = makeTempFile();
-    const store = {
-      reverts: [
-        { service: "svc-a", revertedAt: "2024-01-01T00:00:00Z", fromSnapshot: "snap1", toSnapshot: "snap2" },
-      ],
-    };
-    saveRevertStore(file, store);
-    const loaded = loadRevertStore(file);
-    expect(loaded.reverts).toHaveLength(1);
-    expect(loaded.reverts[0].service).toBe("svc-a");
-    fs.unlinkSync(file);
+  it("round-trips store data", () => {
+    const f = makeTempFile();
+    const store = loadRevertStore(f);
+    revertToSnapshot(store, "svc", "snap-1", { port: 3000 });
+    saveRevertStore(f, store);
+    const reloaded = loadRevertStore(f);
+    expect(getRevertsForService(reloaded, "svc")).toHaveLength(1);
+  });
+});
+
+describe("revertToSnapshot", () => {
+  it("records a revert entry", () => {
+    const store = {};
+    const result = revertToSnapshot(store, "api", "snap-42", { replicas: 2 });
+    expect(result.service).toBe("api");
+    expect(result.snapshotId).toBe("snap-42");
+    expect(result.config).toEqual({ replicas: 2 });
+    expect(result.timestamp).toBeDefined();
   });
 
-  test("revertToSnapshot returns error if service has no current snapshot", () => {
-    const snapshotFile = makeTempFile();
-    const revertFile = makeTempFile();
-    saveSnapshotStore(snapshotFile, { snapshots: {} });
-    const result = revertToSnapshot(snapshotFile, revertFile, "missing-svc", "snap1");
-    expect(result.success).toBe(false);
-    expect(result.message).toContain("No current snapshot");
-    fs.unlinkSync(snapshotFile);
-    fs.unlinkSync(revertFile);
+  it("appends multiple reverts for same service", () => {
+    const store = {};
+    revertToSnapshot(store, "api", "snap-1", { port: 80 });
+    revertToSnapshot(store, "api", "snap-2", { port: 443 });
+    const reverts = getRevertsForService(store, "api");
+    expect(reverts).toHaveLength(2);
   });
+});
 
-  test("revertToSnapshot returns error if target snapshot not found in history", () => {
-    const snapshotFile = makeTempFile();
-    const revertFile = makeTempFile();
-    saveSnapshotStore(snapshotFile, {
-      snapshots: { "svc-a": { id: "snap1", service: "svc-a", config: {}, capturedAt: "2024-01-01T00:00:00Z" } },
-      history: { "svc-a": [] },
-    });
-    const result = revertToSnapshot(snapshotFile, revertFile, "svc-a", "snap-missing");
-    expect(result.success).toBe(false);
-    expect(result.message).toContain("not found");
-    fs.unlinkSync(snapshotFile);
-    fs.unlinkSync(revertFile);
+describe("getRevertsForService", () => {
+  it("returns empty array for unknown service", () => {
+    expect(getRevertsForService({}, "ghost")).toEqual([]);
   });
+});
 
-  test("getRevertsForService filters by service", () => {
-    const file = makeTempFile();
-    saveRevertStore(file, {
-      reverts: [
-        { service: "svc-a", revertedAt: "2024-01-01T00:00:00Z", fromSnapshot: "s1", toSnapshot: "s2" },
-        { service: "svc-b", revertedAt: "2024-01-02T00:00:00Z", fromSnapshot: "s3", toSnapshot: "s4" },
-      ],
-    });
-    const results = getRevertsForService(file, "svc-a");
-    expect(results).toHaveLength(1);
-    expect(results[0].service).toBe("svc-a");
-    fs.unlinkSync(file);
-  });
-
-  test("formatRevertResult formats success and error correctly", () => {
-    expect(formatRevertResult({ success: true, service: "svc", fromSnapshot: "s1", toSnapshot: "s2", message: "Done" })).toBe("[OK] Done");
-    expect(formatRevertResult({ success: false, service: "svc", fromSnapshot: "", toSnapshot: "s2", message: "Fail" })).toBe("[ERROR] Fail");
+describe("formatRevertResult", () => {
+  it("includes service name and snapshotId", () => {
+    const store = {};
+    const result = revertToSnapshot(store, "worker", "snap-7", { timeout: 30 });
+    const text = formatRevertResult(result);
+    expect(text).toMatch(/worker/);
+    expect(text).toMatch(/snap-7/);
   });
 });
