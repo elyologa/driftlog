@@ -1,71 +1,68 @@
 import * as fs from "fs";
-import * as path from "path";
-import { ServiceConfig } from "../parser/yamlParser";
+import { CloneEntry, CloneStore, CloneResult } from "./cloneTypes";
+import { loadSnapshotStore, saveSnapshotStore, getSnapshot, upsertSnapshot, createSnapshot } from "../snapshot/snapshotManager";
 
-export interface CloneEntry {
-  originalService: string;
-  clonedService: string;
-  clonedAt: string;
-  sourceFile: string;
-}
-
-export interface CloneStore {
-  clones: CloneEntry[];
-}
-
-export function loadCloneStore(storePath: string): CloneStore {
-  if (!fs.existsSync(storePath)) {
+export function loadCloneStore(filePath: string): CloneStore {
+  if (!fs.existsSync(filePath)) return { clones: [] };
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(raw) as CloneStore;
+  } catch {
     return { clones: [] };
   }
-  const raw = fs.readFileSync(storePath, "utf-8");
-  return JSON.parse(raw) as CloneStore;
 }
 
-export function saveCloneStore(storePath: string, store: CloneStore): void {
-  fs.mkdirSync(path.dirname(storePath), { recursive: true });
-  fs.writeFileSync(storePath, JSON.stringify(store, null, 2), "utf-8");
+export function saveCloneStore(filePath: string, store: CloneStore): void {
+  fs.writeFileSync(filePath, JSON.stringify(store, null, 2), "utf-8");
 }
 
-export function cloneService(
-  config: ServiceConfig,
-  newName: string,
-  outputDir: string,
-  storePath: string
-): { outputFile: string; entry: CloneEntry } {
-  const clonedConfig: ServiceConfig = {
-    ...config,
-    name: newName,
-  };
+export async function cloneService(
+  originalService: string,
+  clonedService: string,
+  snapshotPath: string,
+  cloneStorePath: string,
+  note?: string
+): Promise<CloneResult> {
+  const snapshotStore = loadSnapshotStore(snapshotPath);
+  const original = getSnapshot(snapshotStore, originalService);
 
-  fs.mkdirSync(outputDir, { recursive: true });
-  const outputFile = path.join(outputDir, `${newName}.json`);
-  fs.writeFileSync(outputFile, JSON.stringify(clonedConfig, null, 2), "utf-8");
+  if (!original) {
+    return {
+      success: false,
+      originalService,
+      clonedService,
+      message: `Original service "${originalService}" not found in snapshots.`,
+    };
+  }
 
+  const clonedSnapshot = createSnapshot(clonedService, { ...original.config });
+  const updatedSnapshotStore = upsertSnapshot(snapshotStore, clonedSnapshot);
+  saveSnapshotStore(snapshotPath, updatedSnapshotStore);
+
+  const cloneStore = loadCloneStore(cloneStorePath);
   const entry: CloneEntry = {
-    originalService: config.name,
-    clonedService: newName,
+    originalService,
+    clonedService,
     clonedAt: new Date().toISOString(),
-    sourceFile: outputFile,
+    note,
   };
+  cloneStore.clones.push(entry);
+  saveCloneStore(cloneStorePath, cloneStore);
 
-  const store = loadCloneStore(storePath);
-  store.clones.push(entry);
-  saveCloneStore(storePath, store);
-
-  return { outputFile, entry };
+  return {
+    success: true,
+    originalService,
+    clonedService,
+    message: `Service "${originalService}" successfully cloned as "${clonedService}".`,
+  };
 }
 
-export function getClonesForService(storePath: string, serviceName: string): CloneEntry[] {
-  const store = loadCloneStore(storePath);
-  return store.clones.filter(
-    (c) => c.originalService === serviceName || c.clonedService === serviceName
-  );
+export function getClonesForService(store: CloneStore, serviceName: string): CloneEntry[] {
+  return store.clones.filter((c) => c.originalService === serviceName);
 }
 
-export function formatCloneResult(entry: CloneEntry, outputFile: string): string {
-  return [
-    `Cloned service "${entry.originalService}" → "${entry.clonedService}"`,
-    `Output: ${outputFile}`,
-    `Timestamp: ${entry.clonedAt}`,
-  ].join("\n");
+export function formatCloneResult(result: CloneResult): string {
+  return result.success
+    ? `✔ ${result.message}`
+    : `✘ ${result.message}`;
 }
