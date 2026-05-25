@@ -12,6 +12,16 @@ export interface ValidationResult {
   driftCount: number;
 }
 
+/**
+ * Validates a service configuration file by parsing it, linting it,
+ * and comparing it against a stored baseline to detect drift.
+ *
+ * @param service - The service name identifier.
+ * @param filePath - Path to the YAML configuration file.
+ * @param snapshotStorePath - Path to the snapshot store directory.
+ * @param baselineStorePath - Path to the baseline store directory.
+ * @returns A ValidationResult summarising errors, warnings, and drift count.
+ */
 export function validateService(
   service: string,
   filePath: string,
@@ -60,6 +70,12 @@ export function validateService(
   };
 }
 
+/**
+ * Formats a ValidationResult into a human-readable string for CLI output.
+ *
+ * @param result - The ValidationResult to format.
+ * @returns A multi-line string representation of the result.
+ */
 export function formatValidationResult(result: ValidationResult): string {
   const lines: string[] = [];
   const status = result.valid ? '✅ VALID' : '❌ INVALID';
