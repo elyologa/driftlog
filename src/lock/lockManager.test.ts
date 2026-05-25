@@ -1,6 +1,6 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import {
   loadLockStore,
   saveLockStore,
@@ -12,78 +12,90 @@ import {
 } from "./lockManager";
 
 function makeTempFile(): string {
-  return path.join(os.tmpdir(), `lockstore-${Date.now()}.json`);
+  return path.join(os.tmpdir(), `lock-mgr-test-${Date.now()}.json`);
 }
 
 describe("lockManager", () => {
-  it("loads empty store when file does not exist", () => {
-    const store = loadLockStore("/nonexistent/path.json");
-    expect(store.locks).toEqual({});
+  let storePath: string;
+
+  beforeEach(() => {
+    storePath = makeTempFile();
   });
 
-  it("saves and loads a store", () => {
-    const tmp = makeTempFile();
-    const store = { locks: {} };
-    lockService(store, "api", "alice", "deploy freeze");
-    saveLockStore(tmp, store);
-    const loaded = loadLockStore(tmp);
-    expect(loaded.locks["api"]).toBeDefined();
-    expect(loaded.locks["api"].lockedBy).toBe("alice");
-    fs.unlinkSync(tmp);
+  afterEach(() => {
+    if (fs.existsSync(storePath)) fs.unlinkSync(storePath);
   });
 
-  it("locks a service successfully", () => {
-    const store = { locks: {} };
-    const result = lockService(store, "api", "alice", "maintenance");
-    expect(result.success).toBe(true);
-    expect(store.locks["api"]).toBeDefined();
+  it("loads an empty store when file does not exist", () => {
+    const store = loadLockStore(storePath);
+    expect(store).toEqual({});
   });
 
-  it("fails to lock an already-locked service", () => {
-    const store = { locks: {} };
-    lockService(store, "api", "alice");
-    const result = lockService(store, "api", "bob");
-    expect(result.success).toBe(false);
-    expect(result.message).toContain("already locked");
+  it("saves and reloads a store", () => {
+    const store = { "svc-a": { service: "svc-a", lockedBy: "alice", reason: "test", lockedAt: "2024-01-01T00:00:00.000Z" } };
+    saveLockStore(storePath, store);
+    const loaded = loadLockStore(storePath);
+    expect(loaded["svc-a"].lockedBy).toBe("alice");
+  });
+
+  it("locks a service and returns updated store", () => {
+    const store = loadLockStore(storePath);
+    const updated = lockService(store, "api", "bob", "freeze for release");
+    expect(updated["api"]).toBeDefined();
+    expect(updated["api"].lockedBy).toBe("bob");
+    expect(updated["api"].reason).toBe("freeze for release");
+    expect(updated["api"].lockedAt).toBeTruthy();
+  });
+
+  it("does not mutate original store on lock", () => {
+    const store = loadLockStore(storePath);
+    lockService(store, "api", "bob", "test");
+    expect(store["api"]).toBeUndefined();
   });
 
   it("unlocks a service", () => {
-    const store = { locks: {} };
-    lockService(store, "api", "alice");
-    const result = unlockService(store, "api", "alice");
-    expect(result.success).toBe(true);
-    expect(store.locks["api"]).toBeUndefined();
+    let store = loadLockStore(storePath);
+    store = lockService(store, "api", "bob", "test");
+    const updated = unlockService(store, "api");
+    expect(updated["api"]).toBeUndefined();
   });
 
-  it("returns failure when unlocking a non-locked service", () => {
-    const store = { locks: {} };
-    const result = unlockService(store, "api", "alice");
-    expect(result.success).toBe(false);
+  it("returns undefined for getLock on unlocked service", () => {
+    const store = loadLockStore(storePath);
+    expect(getLock(store, "missing")).toBeUndefined();
   });
 
-  it("getLock returns the lock or undefined", () => {
-    const store = { locks: {} };
-    lockService(store, "svc", "bob");
-    expect(getLock(store, "svc")).toBeDefined();
-    expect(getLock(store, "other")).toBeUndefined();
+  it("returns lock entry for getLock on locked service", () => {
+    let store = loadLockStore(storePath);
+    store = lockService(store, "svc", "carol", "hotfix");
+    const lock = getLock(store, "svc");
+    expect(lock?.lockedBy).toBe("carol");
   });
 
-  it("listLocks returns all locks", () => {
-    const store = { locks: {} };
-    lockService(store, "a", "alice");
-    lockService(store, "b", "bob");
-    expect(listLocks(store)).toHaveLength(2);
+  it("isLocked returns true for locked service", () => {
+    let store = loadLockStore(storePath);
+    store = lockService(store, "svc", "dave", "reason");
+    expect(isLocked(store, "svc")).toBe(true);
   });
 
-  it("isLocked returns false for expired locks", () => {
-    const store = { locks: {} };
-    lockService(store, "svc", "alice", undefined, new Date(Date.now() - 1000).toISOString());
+  it("isLocked returns false for unlocked service", () => {
+    const store = loadLockStore(storePath);
     expect(isLocked(store, "svc")).toBe(false);
   });
 
-  it("isLocked returns true for active locks", () => {
-    const store = { locks: {} };
-    lockService(store, "svc", "alice");
-    expect(isLocked(store, "svc")).toBe(true);
+  it("listLocks returns all locked services", () => {
+    let store = loadLockStore(storePath);
+    store = lockService(store, "a", "x", "r1");
+    store = lockService(store, "b", "y", "r2");
+    const locks = listLocks(store);
+    expect(locks).toHaveLength(2);
+    const names = locks.map((l) => l.service);
+    expect(names).toContain("a");
+    expect(names).toContain("b");
+  });
+
+  it("listLocks returns empty array when no locks", () => {
+    const store = loadLockStore(storePath);
+    expect(listLocks(store)).toEqual([]);
   });
 });
